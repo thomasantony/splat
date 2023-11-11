@@ -1,0 +1,7 @@
+/target
+*.zip
+*.png
+*.splat
+output
+*.ply
+sparse
