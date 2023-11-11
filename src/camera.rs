@@ -3,11 +3,11 @@ use nalgebra as na;
 pub struct Camera {
     znear: f32,
     zfar: f32,
-    h: f32,
-    w: f32,
+    pub h: f32,
+    pub w: f32,
     fovy: f32,
-    position: na::Point3<f32>,
-    target: na::Point3<f32>,
+    pub position: na::Vector3<f32>,
+    target: na::Vector3<f32>,
     up: na::Vector3<f32>,
     yaw: f32,
     pitch: f32,
@@ -24,8 +24,8 @@ impl Camera {
             h,
             w,
             fovy: std::f32::consts::PI / 2.0,
-            position: na::Point3::new(0.0, 0.0, 3.0),
-            target: na::Point3::new(0.0, 0.0, 0.0),
+            position: na::Vector3::new(0.0, 0.0, 3.0),
+            target: na::Vector3::new(0.0, 0.0, 0.0),
             up: na::Vector3::new(0.0, -1.0, 0.0),
             yaw: -std::f32::consts::PI / 2.0,
             pitch: 0.0,
@@ -36,9 +36,11 @@ impl Camera {
     }
 
     pub fn get_view_matrix(&self) -> na::Matrix4<f32> {
+        let position = na::Point3::from(self.position);
+        let target = na::Point3::from(self.target);
         let view = na::Matrix4::look_at_rh(
-            &self.position,
-            &self.target,
+            &position,
+            &target,
             &self.up,
         );
         view
@@ -55,15 +57,14 @@ impl Camera {
         na::Perspective3::new(self.w / self.h, self.fovy, self.znear, self.zfar).into_inner()
     }
 
-    pub fn get_htanfovxy_focal(&self) -> (f32, f32, f32) {
+    pub fn get_htanfovxy_focal(&self) -> na::Vector3<f32> {
         let htany = (self.fovy / 2.0).tan();
         let htanx = htany / self.h * self.w;
         let focal = self.h / (2.0 * htany);
-        (htanx, htany, focal)
+        na::Vector3::new(htanx, htany, focal)
     }
 
     pub fn get_focal(&self) -> f32 {
         self.h / (2.0 * (self.fovy / 2.0).tan())
     }
-
 }

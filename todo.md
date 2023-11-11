@@ -1,0 +1,6 @@
+- Define camera intrinsics
+- Rotate gaussian positions into camera frame
+- Sort gaussians by depth
+- Compute N images from N gaussians
+- Stack N images by alpha blending
+- Save to PNG?

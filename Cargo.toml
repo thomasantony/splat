@@ -5,9 +5,10 @@ edition = "2021"
 
 default-run = "splat"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+euc = {version="*", git="https://github.com/zesterer/euc", rev="290e14c"}
+minifb = "0.25.0"
 nalgebra = { version = "0.32.3", features = ["glam024"] }
 ply-rs = "0.1.3"
 

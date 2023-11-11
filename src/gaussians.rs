@@ -2,6 +2,8 @@ use na::{UnitQuaternion, Vector3};
 use nalgebra as na;
 use ply_rs::ply::{Property, PropertyAccess};
 
+use crate::camera::Camera;
+
 const SH_C0: f32 = 0.28209479177387814f32;
 const SH_C1: f32 = 0.4886025119029199f32;
 
@@ -21,7 +23,6 @@ const SH_C3_6: f32 = -0.5900435899266435f32;
 
 const HALF: na::Vector3<f32> = na::Vector3::new(0.5, 0.5, 0.5);
 
-
 #[derive(Clone, Debug)]
 pub struct Gaussian {
     pub position: na::Vector3<f32>,  // x, y, z
@@ -30,10 +31,11 @@ pub struct Gaussian {
     pub rotation: na::Quaternion<f32>,  // rot_0, rot_1, rot_2, rot_3
     pub color: na::Vector3<f32>,    // f_dc_0, f_dc_1, f_dc_2
     pub sh: na::SVector<f32, 45>,   // f_rest_0 ... f_rest_44
+    pub cov3d: na::Matrix3<f32>,
 }
 
 impl Gaussian {
-    pub fn to_covariance_3d(&self) -> na::Matrix3<f32>
+    pub fn compute_cov3d(&mut self)
     {
         let rotation = UnitQuaternion::from_quaternion(self.rotation).to_rotation_matrix();        // square the scales and make a diagonal matrix
         // square the scales and make a diagonal matrix
@@ -44,8 +46,62 @@ impl Gaussian {
         );
         // compute the covariance matrix
         let covariance = rotation * scale * rotation.transpose();
-        covariance
+        self.cov3d = covariance;
     }
+    pub fn project_cov3d_to_screen(&self, camera: &Camera) -> (na::Vector3<f32>, na::Vector4<f32>)
+    {
+        let viewmatrix = camera.get_view_matrix();
+
+        // Project the Gaussian center to the camera space
+        let pos_w = na::Vector4::new(self.position[0], self.position[1], self.position[2], 1.0);
+        let pos_cam = viewmatrix * pos_w;
+
+        // Compute the focal length and the tangent of the fov
+        let htanfovxy = camera.get_htanfovxy_focal();
+        let tan_fovx = htanfovxy[0];
+        let tan_fovy = htanfovxy[1];
+        let focal = htanfovxy[2];
+        let focal_x = focal;
+        let focal_y = focal;
+
+        // Compute the tangent of the Gaussian center
+        let mut t = pos_cam.clone();
+        let limx = 1.3 * tan_fovx;
+        let limy = 1.3 * tan_fovy;
+
+        let txtz = pos_cam.x/pos_cam.z;
+        let tytz = pos_cam.y/pos_cam.z;
+
+        t.x = limx.min(-limx.max(txtz)) * pos_cam.z;
+        t.y = limy.min(-limy.max(tytz)) * pos_cam.z;
+
+        // Compute the Jacobian
+        let J = na::Matrix3::new(
+            focal_x / t.z, 0.0, -(focal_x * t.x) / (t.z * t.z),
+            0.0, focal_y / t.z, -(focal_y * t.y) / (t.z * t.z),
+            0.0, 0.0, 0.0
+        );
+
+        let W = viewmatrix.fixed_view::<3, 3>(0, 0).transpose();
+        let T = W * J;
+
+        let mut cov = T.transpose() * self.cov3d.transpose() * T;
+
+        // Apply low-pass filter: every Gaussian should be at least
+        // one pixel wide/high. Discard 3rd row and column.
+        let mut cov2d = cov.fixed_view_mut::<2,2>(0,0);
+        cov2d[(0, 0)] += 0.3;
+        cov2d[(1, 1)] += 0.3;
+
+        let projection_mat = camera.get_project_matrix();
+        let mut pos_screen = projection_mat * pos_cam;
+        // Normalize by dividing by 4th element
+        pos_screen = pos_screen / pos_screen[3];
+
+        // Convert into vector to return, along with position in screen space
+        (Vector3::new(cov2d[(0, 0)], cov2d[(0, 1)], cov2d[(1, 1)]), pos_screen)
+    }
+
     pub fn color(&self, sh_dim: usize, cam_pos: &na::Vector3<f32>) -> (na::Vector3<f32>, f32)
     {
         let dir = (self.position - cam_pos).normalize();
@@ -120,6 +176,7 @@ impl PropertyAccess for Gaussian {
             rotation: na::Quaternion::identity(),
             color: na::Vector3::new(0.0, 0.0, 0.0),
             sh: na::SVector::<f32, 45>::zeros(),
+            cov3d: na::Matrix3::<f32>::zeros(),
         }
     }
     // Set properties from the PLY file
