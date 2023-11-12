@@ -1,7 +1,7 @@
 use std::ops::MulAssign;
 
 use nalgebra as na;
-use na::{UnitQuaternion, Vector3, Matrix3, Vector4};
+use na::{UnitQuaternion, Vector3, Matrix3, Vector4, Vector2};
 use ply_rs::ply::{Property, PropertyAccess};
 
 use crate::camera::Camera;
@@ -191,6 +191,15 @@ impl Gaussian {
         let covariance_matrix = T.transpose() * T;
 
         return covariance_matrix;
+    }
+
+    pub fn extract_scale_of_covariance(&self, cov: Matrix3<f32>) -> Vector2<f32>
+    {
+        let a = (cov[(0,0)] - cov[(1,1)]) * (cov[(0,0)] - cov[(1,1)]);
+        let b = (a + 4.0 * cov[(0,1)] * cov[(0,1)]).sqrt();
+        let semi_major_axis = ((cov[(0,0)] + cov[(1,1)] + b) * 0.5).sqrt();
+        let semi_minor_axis = ((cov[(0,0)] + cov[(1,1)] - b) * 0.5).sqrt();
+        return Vector2::new(semi_major_axis, semi_minor_axis);
     }
 }
 
