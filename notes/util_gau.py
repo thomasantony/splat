@@ -1,3 +1,4 @@
+# Adapted from the version at https://github.com/limacv/GaussianSplattingViewer/blob/main/util_gau.py
 import numpy as np
 from plyfile import PlyData
 from dataclasses import dataclass
@@ -23,7 +24,7 @@ class GaussianData:
 
 def naive_gaussian():
     gau_xyz = np.array([
-        0, 5, 0,
+        0, 0, 0,
         1, 0, 0,
         0, 1, 0,
         0, 0, 1,
