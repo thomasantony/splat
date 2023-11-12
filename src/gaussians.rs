@@ -193,13 +193,50 @@ impl Gaussian {
         return covariance_matrix;
     }
 
-    pub fn extract_scale_of_covariance(&self, cov: Matrix3<f32>) -> Vector2<f32>
+    pub fn extract_scale_of_covariance(&self, cov: &Matrix3<f32>) -> Vector2<f32>
     {
         let a = (cov[(0,0)] - cov[(1,1)]) * (cov[(0,0)] - cov[(1,1)]);
         let b = (a + 4.0 * cov[(0,1)] * cov[(0,1)]).sqrt();
         let semi_major_axis = ((cov[(0,0)] + cov[(1,1)] + b) * 0.5).sqrt();
         let semi_minor_axis = ((cov[(0,0)] + cov[(1,1)] - b) * 0.5).sqrt();
         return Vector2::new(semi_major_axis, semi_minor_axis);
+    }
+
+    pub fn extract_rotation_of_ellipse(&self, cov: &Matrix3<f32>) -> Vector2<f32> {
+        /*
+            phi = atan(2.0 * cov[(0,1)] / (cov[(0,0)] - cov[(1,1)])) / 2
+            k = cos(phi)
+            j = sin(phi)
+            Insert angle phi into cos() and then apply the half-angle identity to get:
+        */
+        let a = (cov[(0,0)] - cov[(1,1)]) * (cov[(0,0)] - cov[(1,1)]);
+        let b = a + 4.0 * cov[(0,1)] * cov[(0,1)];
+        let c = 0.5 * (a / b).sqrt();
+        let mut j = (0.5 - c).sqrt();
+        let mut k = -(0.5 + c).sqrt() * (cov[(0,1)]).signum() * (cov[(0,0)] - cov[(1,1)]).signum();
+        if cov[(0,1)] < 0.0 || cov[(0,0)] - cov[(1,1)] < 0.0 {
+            k = -k;
+            j = -j;
+        }
+        if cov[(0,0)] - cov[(1,1)] < 0.0 {
+            let t = j;
+            j = -k;
+            k = t;
+        }
+        return Vector2::new(j, k);
+    }
+    pub fn extract_translation_of_ellipse(&self, cov: &Matrix3<f32>) -> Vector2<f32> {
+        /*
+            The center of the ellipse is at the extremum (minimum / maximum) of the implicit curve.
+            So, take the partial derivative in x and y, which is: (2.0 * cov[(0,0)] * x + M.x.y * y + cov[(0,2)], M.x.y * x + 2.0 * cov[(1,1)] * y + cov[(1,2)])
+            And the roots of that partial derivative are the position of the extremum, thus the translation of the ellipse.
+        */
+        let discriminant = cov[(0,0)] * cov[(1,1)] - cov[(0,1)] * cov[(0,1)];
+        let inverse_discriminant = 1.0 / discriminant;
+        return Vector2::new(
+            cov[(0,1)] * cov[(1,2)] - cov[(1,1)] * cov[(0,2)],
+            cov[(0,1)] * cov[(0,2)] - cov[(0,0)] * cov[(1,2)],
+        ) * inverse_discriminant;
     }
 }
 
