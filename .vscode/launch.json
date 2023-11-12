@@ -1,0 +1,134 @@
+{
+  // Use IntelliSense to learn about possible attributes.
+  // Hover to view descriptions of existing attributes.
+  // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "type": "lldb",
+      "request": "launch",
+      "name": "Debug unit tests in library 'splat'",
+      "cargo": {
+        "args": ["test", "--no-run", "--lib", "--package=splat"],
+        "filter": {
+          "name": "splat",
+          "kind": "lib"
+        }
+      },
+      "args": [],
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "type": "lldb",
+      "request": "launch",
+      "name": "Debug executable 'splat'",
+      "cargo": {
+        "args": ["build", "--bin=splat", "--package=splat"],
+        "filter": {
+          "name": "splat",
+          "kind": "bin"
+        }
+      },
+      "args": [],
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "type": "lldb",
+      "request": "launch",
+      "name": "Debug unit tests in executable 'splat'",
+      "cargo": {
+        "args": ["test", "--no-run", "--bin=splat", "--package=splat"],
+        "filter": {
+          "name": "splat",
+          "kind": "bin"
+        }
+      },
+      "args": [],
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "type": "lldb",
+      "request": "launch",
+      "name": "Debug executable 'euc'",
+      "cargo": {
+        "args": ["build", "--bin=euc", "--package=splat"],
+        "filter": {
+          "name": "euc",
+          "kind": "bin"
+        }
+      },
+      "args": [],
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "type": "lldb",
+      "request": "launch",
+      "name": "Debug unit tests in executable 'euc'",
+      "cargo": {
+        "args": ["test", "--no-run", "--bin=euc", "--package=splat"],
+        "filter": {
+          "name": "euc",
+          "kind": "bin"
+        }
+      },
+      "args": [],
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "type": "lldb",
+      "request": "launch",
+      "name": "Debug executable 'trim'",
+      "cargo": {
+        "args": ["build", "--bin=trim", "--package=splat"],
+        "filter": {
+          "name": "trim",
+          "kind": "bin"
+        }
+      },
+      "args": [],
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "type": "lldb",
+      "request": "launch",
+      "name": "Debug unit tests in executable 'trim'",
+      "cargo": {
+        "args": ["test", "--no-run", "--bin=trim", "--package=splat"],
+        "filter": {
+          "name": "trim",
+          "kind": "bin"
+        }
+      },
+      "args": [],
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "type": "lldb",
+      "request": "launch",
+      "name": "Debug executable 'attempt01'",
+      "cargo": {
+        "args": ["build", "--bin=attempt01", "--package=splat"],
+        "filter": {
+          "name": "attempt01",
+          "kind": "bin"
+        }
+      },
+      "args": [],
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "type": "lldb",
+      "request": "launch",
+      "name": "Debug unit tests in executable 'attempt01'",
+      "cargo": {
+        "args": ["test", "--no-run", "--bin=attempt01", "--package=splat"],
+        "filter": {
+          "name": "attempt01",
+          "kind": "bin"
+        }
+      },
+      "args": [],
+      "cwd": "${workspaceFolder}"
+    }
+  ]
+}
