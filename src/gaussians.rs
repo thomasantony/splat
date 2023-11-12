@@ -1,5 +1,7 @@
-use na::{UnitQuaternion, Vector3};
+use std::ops::MulAssign;
+
 use nalgebra as na;
+use na::{UnitQuaternion, Vector3, Matrix3, Vector4};
 use ply_rs::ply::{Property, PropertyAccess};
 
 use crate::camera::Camera;
@@ -102,10 +104,8 @@ impl Gaussian {
         (Vector3::new(cov2d[(0, 0)], cov2d[(0, 1)], cov2d[(1, 1)]), pos_screen)
     }
 
-    pub fn color(&self, sh_dim: usize, cam_pos: &na::Vector3<f32>) -> (na::Vector3<f32>, f32)
+    pub fn color(&self, sh_dim: usize, dir: &na::Vector3<f32>) -> (na::Vector3<f32>, f32)
     {
-        let dir = (self.position - cam_pos).normalize();
-
         // Compute color from the spherical harmonics for the given direction
         // The coefficients are laid out as:
         // C0_R, C0_B, C0_G, C1_R, C1_B, C1_G ...
@@ -164,6 +164,33 @@ impl Gaussian {
         }
         color += HALF;
         (color, self.opacity)
+    }
+
+    pub fn projected_covariance_of_ellipsoid(&self, camera: &Camera) -> Matrix3<f32> {
+        let view_matrix = camera.get_view_matrix(); // world -> camera converter
+        let camera_matrix = view_matrix.try_inverse().unwrap();
+        let camera_matrix = camera_matrix.fixed_view::<3,3>(0,0); // camera -> world converter
+
+        let mut transform = Matrix3::from(UnitQuaternion::from_quaternion(self.rotation).to_rotation_matrix());
+        transform.row_mut(0).mul_assign(self.scale[0]);
+        transform.row_mut(1).mul_assign(self.scale[1]);
+        transform.row_mut(2).mul_assign(self.scale[2]);
+
+        let translation = Vector4::new(self.position[0], self.position[1], self.position[2], 1.0);
+        // 3D Covariance
+        let mut view_pos = view_matrix * translation;
+        view_pos[0] = (view_pos[0] / view_pos[2]).clamp(-1.0, 1.0) * view_pos[2];
+        view_pos[1] = (view_pos[1] / view_pos[2]).clamp(-1.0, 1.0) * view_pos[2];
+
+        let J = Matrix3::<f32>::new(
+            1.0 / view_pos[2], 0.0, -view_pos[0] / (view_pos[2] * view_pos[2]),
+            0.0, 1.0 / view_pos[2], -view_pos[1] / (view_pos[2] * view_pos[2]),
+            0.0, 0.0, 0.0,
+        );
+        let T = transform.transpose() * camera_matrix * J;
+        let covariance_matrix = T.transpose() * T;
+
+        return covariance_matrix;
     }
 }
 
