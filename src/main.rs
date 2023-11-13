@@ -1,7 +1,7 @@
-use euc::{buffer::Buffer2d, rasterizer, Pipeline, TriangleList, Empty};
+use euc::{buffer::Buffer2d, Pipeline, TriangleList, Empty};
 use nalgebra as na;
 use splat::{gaussians::{Gaussian, self}, camera::Camera};
-use na::{Vector2, Vector3, Vector4, Matrix3, Matrix4, Matrix3x2, RowVector3, Vector6, SVector};
+use na::{Vector2, Vector3, Vector4, SVector};
 
 struct Triangle {
     pub vertices: Vec<Vector2<f32>>,
@@ -93,12 +93,12 @@ impl<'r> Pipeline<'r> for Triangle {
         {
             return Self::Fragment::zeros();
         }
-        let mut alpha = 0.99f32.min(alpha * power.exp());
+        let alpha = 0.99f32.min(alpha * power.exp());
         if alpha < 1.0 / 255.0
         {
-            alpha = 0.0;
+            return Self::Fragment::zeros();
         }
-        Vector4::new(color_rgb[0]*alpha, color_rgb[1]*alpha, color_rgb[2]*alpha, alpha)
+        Vector4::new(color_rgb[0], color_rgb[1], color_rgb[2], alpha)
     }
 
     fn blend(&self, old_color: Self::Pixel, new_color: Self::Fragment) -> Self::Pixel {
@@ -113,16 +113,20 @@ impl<'r> Pipeline<'r> for Triangle {
         );
         let alpha = new_color[3];
         let blended_color = (1.0 - alpha) * old_color + alpha * new_color;
-        // println!("Blended color: {:?}", blended_color);
-        let r = (blended_color[0] * 255.0) as u32;
-        let g = (blended_color[1] * 255.0) as u32;
-        let b = (blended_color[2] * 255.0) as u32;
-        (r << 16) | (g << 8) | b
+        let r = (blended_color[0] * 255.0) as u8;
+        let g = (blended_color[1] * 255.0) as u8;
+        let b = (blended_color[2] * 255.0) as u8;
+        u32::from_le_bytes([
+            b,
+            g,
+            r,
+            (alpha * 255.0) as u8,
+        ])
     }
 }
 
-const W: usize = 1280/2;
-const H: usize = 720/2;
+const W: usize = 1280;
+const H: usize = 720;
 
 fn main() {
     let mut color = Buffer2d::fill([W, H], 0);
