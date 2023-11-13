@@ -17,14 +17,14 @@ pub struct Camera {
 }
 
 impl Camera {
-    pub fn new(h: f32, w: f32) -> Self {
+    pub fn new(h: f32, w: f32, position: Option<na::Vector3<f32>>) -> Self {
         Self {
             znear: 0.01,
             zfar: 100.0,
             h,
             w,
             fovy: std::f32::consts::PI / 2.0,
-            position: na::Vector3::new(0.0, 0.0, 3.0),
+            position: position.unwrap_or(na::Vector3::new(0.0, 0.0, 3.0)),
             target: na::Vector3::new(0.0, 0.0, 0.0),
             up: na::Vector3::new(0.0, -1.0, 0.0),
             yaw: -std::f32::consts::PI / 2.0,
