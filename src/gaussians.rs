@@ -1,7 +1,7 @@
 use std::ops::MulAssign;
 
 use nalgebra as na;
-use na::{UnitQuaternion, Vector3, Matrix3, Vector4, Vector2};
+use na::{UnitQuaternion, Vector3, Matrix3, Vector4, Vector2, Matrix4};
 use ply_rs::ply::{Property, PropertyAccess};
 
 use crate::camera::Camera;
@@ -50,12 +50,13 @@ impl Gaussian {
         let covariance = rotation * scale * rotation.transpose();
         self.cov3d = covariance;
     }
-    pub fn project_cov3d_to_screen(&self, camera: &Camera) -> (na::Vector3<f32>, na::Vector4<f32>)
+    pub fn project_cov3d_to_screen(&self, camera: &Camera) -> na::Matrix2<f32>
     {
         let viewmatrix = camera.get_view_matrix();
 
         // Project the Gaussian center to the camera space
         let pos_w = na::Vector4::new(self.position[0], self.position[1], self.position[2], 1.0);
+
         let pos_cam = viewmatrix * pos_w;
 
         // Compute the focal length and the tangent of the fov
@@ -74,8 +75,8 @@ impl Gaussian {
         let txtz = pos_cam.x/pos_cam.z;
         let tytz = pos_cam.y/pos_cam.z;
 
-        t.x = limx.min(-limx.max(txtz)) * pos_cam.z;
-        t.y = limy.min(-limy.max(tytz)) * pos_cam.z;
+        t.x = limx.min((-limx).max(txtz)) * pos_cam.z;
+        t.y = limy.min((-limy).max(tytz)) * pos_cam.z;
 
         // Compute the Jacobian
         let J = na::Matrix3::new(
@@ -86,7 +87,6 @@ impl Gaussian {
 
         let W = viewmatrix.fixed_view::<3, 3>(0, 0).transpose();
         let T = W * J;
-
         let mut cov = T.transpose() * self.cov3d.transpose() * T;
 
         // Apply low-pass filter: every Gaussian should be at least
@@ -95,13 +95,8 @@ impl Gaussian {
         cov2d[(0, 0)] += 0.3;
         cov2d[(1, 1)] += 0.3;
 
-        let projection_mat = camera.get_project_matrix();
-        let mut pos_screen = projection_mat * pos_cam;
-        // Normalize by dividing by 4th element
-        pos_screen = pos_screen / pos_screen[3];
-
         // Convert into vector to return, along with position in screen space
-        (Vector3::new(cov2d[(0, 0)], cov2d[(0, 1)], cov2d[(1, 1)]), pos_screen)
+        cov2d.into()
     }
 
     pub fn color(&self, sh_dim: usize, dir: &na::Vector3<f32>) -> (na::Vector3<f32>, f32)
@@ -314,6 +309,46 @@ pub fn sort_gaussians_by_depth(positions_w: &na::Matrix4xX<f32>, view: &na::Matr
     indices
 }
 
+pub fn naive_gaussians() -> Vec<Gaussian>
+{
+    // Generates 4 gaussians used for testing
+    let mut output = Vec::new();
+
+    let mut g = Gaussian::new();
+    g.position = Vector3::new(0.0, 0.0, 0.0);
+    g.scale = Vector3::new(0.03, 0.03, 0.03);
+    g.opacity = 1.0;
+    g.rotation = na::Quaternion::new(1.0, 0.0, 0.0, 0.0);
+    g.color = Vector3::new(1.0, 0.0, 1.0);
+    output.push(g);
+
+    let mut g = Gaussian::new();
+    g.position = Vector3::new(1.0, 0.0, 0.0);
+    g.scale = Vector3::new(0.2, 0.03, 0.03,);
+    g.opacity = 1.0;
+    g.rotation = na::Quaternion::new(1.0, 0.0, 0.0, 0.0);
+    g.color = Vector3::new(1.0, 0.0, 0.0);
+    output.push(g);
+
+    let mut g = Gaussian::new();
+    g.position = Vector3::new(0.0, 1.0, 0.0);
+    g.scale = Vector3::new(0.03, 0.2, 0.03);
+    g.opacity = 1.0;
+    g.rotation = na::Quaternion::new(1.0, 0.0, 0.0, 0.0);
+    g.color = Vector3::new(0.0, 1.0, 0.0);
+    output.push(g);
+
+    let mut g = Gaussian::new();
+    g.position = Vector3::new(0.0, 0.0, 1.0);
+    g.scale = Vector3::new(0.03, 0.03, 0.2);
+    g.opacity = 1.0;
+    g.rotation = na::Quaternion::new(1.0, 0.0, 0.0, 0.0);
+    g.color = Vector3::new(0.0, 0.0, 1.0);
+    output.push(g);
+
+    output
+
+}
 pub fn load_from_ply(filename: &str) -> Vec<Gaussian>
 {
         let mut gaussians = Vec::new();
