@@ -145,8 +145,8 @@ fn main() {
         gaussian.compute_cov3d();
     }
 
-
-    let camera = Camera::new(H as f32, W as f32);
+    let camera_pos = Vector3::new(-0.57651054, 2.99040512, -0.03924271);
+    let camera = Camera::new(H as f32, W as f32, Some(camera_pos));
     let sorted_gaussians = gaussians::sort_gaussians(&gaussians, &camera.get_view_matrix());
     // Create vector of VertexInstances from combining vertices and gaussians
     let mut vertex_instances = Vec::new();
