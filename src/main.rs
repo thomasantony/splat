@@ -1,7 +1,7 @@
 use euc::{buffer::Buffer2d, rasterizer, Pipeline, TriangleList, Empty};
 use nalgebra as na;
 use splat::{gaussians::{Gaussian, self}, camera::Camera};
-use na::{Vector2, Vector3, Vector4, Matrix3, Matrix4, Matrix3x2, RowVector3, Vector6};
+use na::{Vector2, Vector3, Vector4, Matrix3, Matrix4, Matrix3x2, RowVector3, Vector6, SVector};
 
 struct Triangle {
     pub vertices: Vec<Vector2<f32>>,
@@ -15,13 +15,9 @@ pub struct VertexInstance {
     pub gaussian_idx: usize,
 }
 
-pub struct VertexOutput {
-    pub gl_position: Vector4<f32>,
-}
-
 impl<'r> Pipeline<'r> for Triangle {
     type Vertex = VertexInstance;
-    type VertexData = Vector6<f32>; // color, alpha, texcoord
+    type VertexData = SVector<f32, 9>; // color, alpha, conic, coordxy
     type Primitives = TriangleList;
     type Fragment = Vector4<f32>;
     type Pixel = u32;
@@ -30,60 +26,79 @@ impl<'r> Pipeline<'r> for Triangle {
         let gaussian = &self.gaussians[vert_inst.gaussian_idx];
         let world_position: na::Matrix<f32, na::Const<3>, na::Const<1>, na::ArrayStorage<f32, 3, 1>> = gaussian.position;
         let ray_direction = (world_position - self.camera.position).normalize();
-
         let (color, alpha) = gaussian.color(15, &ray_direction);
 
-        let covariance = gaussian.projected_covariance_of_ellipsoid(&self.camera);
-        let semi_axes = gaussian.extract_scale_of_covariance(&covariance);
+        let vert = &self.vertices[vert_inst.vert_idx];
 
+        // Create conic, coordxy, gl_position for passing to fragment shader
+        let mut gl_position: na::Matrix<f32, na::Const<4>, na::Const<1>, na::ArrayStorage<f32, 4, 1>> = Vector4::zeros();
 
-        let rotation = gaussian.extract_rotation_of_ellipse(&covariance);
-        let translation = gaussian.extract_translation_of_ellipse(&covariance);
+        let cov2d = gaussian.project_cov3d_to_screen(&self.camera);
 
-        const ELLIPSE_SIZE_BIAS: f32 = 0.2f32;
-        let mut transformation = Matrix3x2::<f32>::zeros();
-        let transform_row0 = Vector2::new(rotation[1], -rotation[0]) * (ELLIPSE_SIZE_BIAS + semi_axes[0]);
-        let transform_row1 = Vector2::new(rotation[0], rotation[1]) * (ELLIPSE_SIZE_BIAS + semi_axes[1]);
-        transformation.set_row(0, &transform_row0.transpose());
-        transformation.set_row(1, &transform_row1.transpose());
-        transformation.set_row(2, &translation.transpose());
+        let cov2d_inv =  cov2d.try_inverse().unwrap();
+        let conic = Vector3::new(cov2d_inv[(0,0)], cov2d_inv[(0, 1)], cov2d_inv[(1, 1)]);
 
-        let T = Matrix3::from_rows(
+        // compute 3-sigma bounding box size
+        // Divide out the camera width and height to get in NDC
+        let bboxsize_cam = Vector2::new(3.0 * cov2d[(0,0)].sqrt(), 3.0 * cov2d[(1,1)].sqrt());
+
+        // Divide out camera plane size to get bounding box size in NDC
+        let wh = Vector2::new(self.camera.w, self.camera.h);
+        let bboxsize_ndc = bboxsize_cam.component_div(&wh) * 2.0;
+
+        // Coordxy value (used to evaluate gaussian, also in camera space coordinates)
+        let coordxy = vert.component_mul(&bboxsize_cam);
+
+        // compute g_pos_screen and gl_position
+        let view_matrix = self.camera.get_view_matrix();
+        let projection_matrix = self.camera.get_project_matrix();
+        let position4 = Vector4::new(world_position[0], world_position[1], world_position[2], 1.0);
+        let g_pos_view = view_matrix * position4;
+
+        let mut g_pos_screen = projection_matrix * g_pos_view;
+        g_pos_screen = g_pos_screen / g_pos_screen[3];
+
+        gl_position[0] = vert[0] * bboxsize_ndc[0] + g_pos_screen[0];
+        gl_position[1] = vert[1] * bboxsize_ndc[1] + g_pos_screen[1];
+        gl_position[2] = g_pos_screen[2];
+        gl_position[3] = g_pos_screen[3];
+
+        // Placeholder outputs for now
+        let vertex_data = SVector::<f32, 9>::from_row_slice(
             &[
-                RowVector3::new(transformation[(0,0)], transformation[(0,1)], 0.0),
-                RowVector3::new(transformation[(1,0)], transformation[(1,1)], 0.0),
-                RowVector3::new(transformation[(2,0)], transformation[(2,1)], 1.0)
+            color[0],
+            color[1],
+            color[2],
+            alpha,
+            conic[0],
+            conic[1],
+            conic[2],
+            coordxy[0],
+            coordxy[1],
             ]
         );
 
-        let field_of_view_y = std::f32::consts::PI * 0.5;
-        let view_height = (field_of_view_y * 0.5).tan();
-        let view_width = (512 as f32 / 512 as f32) / view_height;
-        let view_size =  Vector2::new(view_width, view_height);
-
-        let vert_pos = self.vertices[vert_inst.vert_idx];
-        let v3 = T * Vector3::new(vert_pos[0], vert_pos[1], 1.0);
-        let v2 = v3.fixed_rows::<2>(0).component_div(&view_size);
-
-        let gl_texcoord = vert_pos;
-        let gl_position = Vector4::new(v2[0], v2[1], 0.0, 1.0);
-
-        ([gl_position[0], gl_position[1], gl_position[2], gl_position[3]], Vector6::new(color[0], color[1], color[2], alpha, gl_texcoord[0], gl_texcoord[1]))
+        ([gl_position[0], gl_position[1], gl_position[2], gl_position[3]], vertex_data)
     }
 
-    fn fragment(&self, col_texcoord: Self::VertexData) -> Self::Fragment {
-        // println!("Fragment: {:?}", col);
-        let color = Vector4::new(col_texcoord[0], col_texcoord[1], col_texcoord[2], col_texcoord[3]);
-        let gl_texcoord = Vector2::new(col_texcoord[4], col_texcoord[5]);
-        let power = gl_texcoord.dot(&gl_texcoord);
-        let alpha = color[3] * (-0.5 * power).exp();
-        if alpha < 1.0/255.0 {
-            // Return black with zero alpha
-            Vector4::new(0.0, 0.0, 0.0, 0.0)
-        }else{
-            let color = Vector4::new(color[0]*alpha, color[1]*alpha, color[2]*alpha, alpha);
-            color
+    fn fragment(&self, vert_output: Self::VertexData) -> Self::Fragment {
+        let color_rgb  = Vector3::new(vert_output[0], vert_output[1], vert_output[2]);
+        let alpha = vert_output[3];
+        let conic = Vector3::new(vert_output[4], vert_output[5], vert_output[6]);
+        let coordxy = Vector2::new(vert_output[7], vert_output[8]);
+
+        // let power = -0.5 * (conic.x * coordxy.x * coordxy.x + conic.z * coordxy.y * coordxy.y) - conic.y * coordxy.x * coordxy.y;
+        let power = -0.5 * (conic[0] * coordxy[0] * coordxy[0] + conic[2] * coordxy[1] * coordxy[1]) - conic[1] * coordxy[0] * coordxy[1];
+        if power > 0.0
+        {
+            return Self::Fragment::zeros();
         }
+        let mut alpha = 0.99f32.min(alpha * power.exp());
+        if alpha < 1.0 / 255.0
+        {
+            alpha = 0.0;
+        }
+        Vector4::new(color_rgb[0]*alpha, color_rgb[1]*alpha, color_rgb[2]*alpha, alpha)
     }
 
     fn blend(&self, old_color: Self::Pixel, new_color: Self::Fragment) -> Self::Pixel {
@@ -106,12 +121,11 @@ impl<'r> Pipeline<'r> for Triangle {
     }
 }
 
-const W: usize = 640;
-const H: usize = 480;
+const W: usize = 1280/2;
+const H: usize = 720/2;
 
 fn main() {
-    let [w, h] = [640, 480];
-    let mut color = Buffer2d::fill([w, h], 0);
+    let mut color = Buffer2d::fill([W, H], 0);
     const VERTICES: &[Vector2<f32>] = &[
         Vector2::new(-1.,  1.),
         Vector2::new(-1.,  -1.),
@@ -121,8 +135,18 @@ fn main() {
 
     const INDICES: &[usize] = &[0, 1, 2, 0, 2, 3];
 
-    let gaussians = gaussians::load_from_ply("simple2.ply");
-    let camera = Camera::new(w as f32, h as f32);
+    println!("Loading gaussians from ply file");
+    let mut gaussians = gaussians::load_from_ply("notes/point_cloud.ply");
+    // let mut gaussians = gaussians::naive_gaussians();
+
+    // Compute cov3d for each gaussian
+    println!("Computing cov3d for each gaussian");
+    for gaussian in gaussians.iter_mut() {
+        gaussian.compute_cov3d();
+    }
+
+
+    let camera = Camera::new(H as f32, W as f32);
     let sorted_gaussians = gaussians::sort_gaussians(&gaussians, &camera.get_view_matrix());
     // Create vector of VertexInstances from combining vertices and gaussians
     let mut vertex_instances = Vec::new();
@@ -136,11 +160,14 @@ fn main() {
         }
     }
 
-    Triangle{
+    let pipeline = Triangle {
         vertices: VERTICES.to_vec(),
         gaussians: gaussians.to_vec(),
         camera,
-    }.render(
+    };
+
+    println!("Rendering");
+    pipeline.render(
         vertex_instances,
         &mut color,
         &mut Empty::default(),
@@ -149,5 +176,6 @@ fn main() {
     let mut win = minifb::Window::new("Splat", W, H, minifb::WindowOptions::default()).unwrap();
     while win.is_open() {
         win.update_with_buffer(color.raw(), W, H).unwrap();
+        // win.update_with_buffer(color.raw(), W, H).unwrap();
     }
 }
