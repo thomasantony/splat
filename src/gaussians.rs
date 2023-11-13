@@ -31,8 +31,7 @@ pub struct Gaussian {
     pub scale: na::Vector3<f32>,    // scale_0, scale_1, scale_2
     pub opacity: f32,               // opacity
     pub rotation: na::Quaternion<f32>,  // rot_0, rot_1, rot_2, rot_3
-    pub color: na::Vector3<f32>,    // f_dc_0, f_dc_1, f_dc_2
-    pub sh: na::SVector<f32, 45>,   // f_rest_0 ... f_rest_44
+    pub sh: na::SVector<f32, 48>,   // f_dc_0..3 and f_rest_0 ... f_rest_44
     pub cov3d: na::Matrix3<f32>,
 }
 
@@ -106,7 +105,7 @@ impl Gaussian {
         // C0_R, C0_B, C0_G, C1_R, C1_B, C1_G ...
 
         let c0 = na::Vector3::new(self.sh[0], self.sh[1], self.sh[2]);
-        let mut color = SH_C0 * c0.component_mul(&self.color);
+        let mut color = SH_C0 * c0;
 
         if sh_dim > 3
         {
@@ -242,8 +241,7 @@ impl PropertyAccess for Gaussian {
             scale: na::Vector3::new(0.0, 0.0, 0.0),
             opacity: 0.0,
             rotation: na::Quaternion::identity(),
-            color: na::Vector3::new(0.0, 0.0, 0.0),
-            sh: na::SVector::<f32, 45>::zeros(),
+            sh: na::SVector::<f32, 48>::zeros(),
             cov3d: na::Matrix3::<f32>::zeros(),
         }
     }
@@ -263,12 +261,12 @@ impl PropertyAccess for Gaussian {
             ("rot_1", Property::Float(v)) => self.rotation[1] = v,
             ("rot_2", Property::Float(v)) => self.rotation[2] = v,
             ("rot_3", Property::Float(v)) => self.rotation[3] = v,
-            ("f_dc_0", Property::Float(v)) => self.color[0] = v,
-            ("f_dc_1", Property::Float(v)) => self.color[1] = v,
-            ("f_dc_2", Property::Float(v)) => self.color[2] = v,
+            ("f_dc_0", Property::Float(v)) => self.sh[0] = v,
+            ("f_dc_1", Property::Float(v)) => self.sh[1] = v,
+            ("f_dc_2", Property::Float(v)) => self.sh[2] = v,
             (s, Property::Float(v)) if s.starts_with("f_rest_") => {
                 let index = s[7..].parse::<usize>().unwrap();
-                self.sh[index] = v;
+                self.sh[3+index] = v;
             }
             _ => {}
         }
@@ -319,7 +317,11 @@ pub fn naive_gaussians() -> Vec<Gaussian>
     g.scale = Vector3::new(0.03, 0.03, 0.03);
     g.opacity = 1.0;
     g.rotation = na::Quaternion::new(1.0, 0.0, 0.0, 0.0);
-    g.color = Vector3::new(1.0, 0.0, 1.0);
+    let mut color = Vector3::new(1.0, 0.0, 1.0);
+    color = (color - HALF) / 0.28209;
+    g.sh[0] = color[0];
+    g.sh[1] = color[1];
+    g.sh[2] = color[2];
     output.push(g);
 
     let mut g = Gaussian::new();
@@ -327,7 +329,11 @@ pub fn naive_gaussians() -> Vec<Gaussian>
     g.scale = Vector3::new(0.2, 0.03, 0.03,);
     g.opacity = 1.0;
     g.rotation = na::Quaternion::new(1.0, 0.0, 0.0, 0.0);
-    g.color = Vector3::new(1.0, 0.0, 0.0);
+    let mut color = Vector3::new(1.0, 0.0, 0.0);
+    color = (color - HALF) / 0.28209;
+    g.sh[0] = color[0];
+    g.sh[1] = color[1];
+    g.sh[2] = color[2];
     output.push(g);
 
     let mut g = Gaussian::new();
@@ -335,7 +341,11 @@ pub fn naive_gaussians() -> Vec<Gaussian>
     g.scale = Vector3::new(0.03, 0.2, 0.03);
     g.opacity = 1.0;
     g.rotation = na::Quaternion::new(1.0, 0.0, 0.0, 0.0);
-    g.color = Vector3::new(0.0, 1.0, 0.0);
+    let mut color = Vector3::new(0.0, 1.0, 0.0);
+    color = (color - HALF) / 0.28209;
+    g.sh[0] = color[0];
+    g.sh[1] = color[1];
+    g.sh[2] = color[2];
     output.push(g);
 
     let mut g = Gaussian::new();
@@ -343,7 +353,11 @@ pub fn naive_gaussians() -> Vec<Gaussian>
     g.scale = Vector3::new(0.03, 0.03, 0.2);
     g.opacity = 1.0;
     g.rotation = na::Quaternion::new(1.0, 0.0, 0.0, 0.0);
-    g.color = Vector3::new(0.0, 0.0, 1.0);
+    let mut color = Vector3::new(0.0, 0.0, 1.0);
+    color = (color - HALF) / 0.28209;
+    g.sh[0] = color[0];
+    g.sh[1] = color[1];
+    g.sh[2] = color[2];
     output.push(g);
 
     output
