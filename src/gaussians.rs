@@ -1,10 +1,12 @@
 use std::ops::MulAssign;
 
 use nalgebra as na;
-use na::{UnitQuaternion, Vector3, Matrix3, Vector4, Vector2};
+use na::{UnitQuaternion, Vector3, Matrix3, Vector4, Vector2, OMatrix, VectorView};
 use ply_rs::ply::{Property, PropertyAccess};
 
 use crate::camera::Camera;
+
+type Matrix48xX<T> = OMatrix<T, na::U48, na::Dyn>;
 
 const SH_C0: f32 = 0.28209479177387814f32;
 const SH_C1: f32 = 0.4886025119029199f32;
@@ -35,6 +37,65 @@ pub struct Gaussian {
     pub cov3d: na::Matrix3<f32>,
 }
 
+pub fn eval_spherical_harmonics(sh: &VectorView<f32, na::U48>, sh_dim: usize, dir: &Vector3<f32>) -> Vector3<f32>
+{
+    let c0 = sh.fixed_rows::<3>(0);
+    let mut color = SH_C0 * c0;
+
+    if sh_dim > 3
+    {
+        // Add the first order spherical harmonics
+        let c1 = sh.fixed_rows::<3>(3);
+        let c2 = sh.fixed_rows::<3>(6);
+        let c3 = sh.fixed_rows::<3>(9);
+
+        // Get a 3x3 view into the elements 3..12 of sh
+
+        let x = dir[0];
+        let y = dir[1];
+        let z = dir[2];
+
+        color = color - SH_C1 * y * c1 + SH_C1 * z * c2 - SH_C1 * x * c3;
+
+        if sh_dim > 12
+        {
+            let c4 = sh.fixed_rows::<3>(12);
+            let c5 = sh.fixed_rows::<3>(15);
+            let c6 = sh.fixed_rows::<3>(18);
+            let c7 = sh.fixed_rows::<3>(21);
+            let c8 = sh.fixed_rows::<3>(24);
+
+            let (xx, yy, zz) = (x * x, y * y, z * z);
+            let (xy, yz, xz) = (x * y, y * z, x * z);
+            color = color +	SH_C2_0 * xy * c4 +
+            SH_C2_1 * yz * c5 +
+            SH_C2_2 * (2.0f32 * zz - xx - yy) * c6 +
+            SH_C2_3 * xz * c7 +
+            SH_C2_4 * (xx - yy) * c8;
+
+            if sh_dim > 27 {
+                let c9 = sh.fixed_rows::<3>(27);
+                let c10 = sh.fixed_rows::<3>(30);
+                let c11 = sh.fixed_rows::<3>(33);
+                let c12 = sh.fixed_rows::<3>(36);
+                let c13 = sh.fixed_rows::<3>(39);
+                let c14 = sh.fixed_rows::<3>(42);
+                let c15 = sh.fixed_rows::<3>(45);
+
+                color = color +
+                SH_C3_0 * y * (3.0f32 * xx - yy) * c9 +
+                SH_C3_1 * xy * z * c10 +
+                SH_C3_2 * y * (4.0f32 * zz - xx - yy) * c11 +
+                SH_C3_3 * z * (2.0f32 * zz - 3.0f32 * xx - 3.0f32 * yy) * c12 +
+                SH_C3_4 * x * (4.0f32 * zz - xx - yy) * c13 +
+                SH_C3_5 * z * (xx - yy) * c14 +
+                SH_C3_6 * x * (xx - 3.0f32 * yy) * c15;
+            }
+        }
+    }
+    color += HALF;
+    color
+}
 impl Gaussian {
     pub fn compute_cov3d(&mut self)
     {
@@ -103,60 +164,7 @@ impl Gaussian {
         // Compute color from the spherical harmonics for the given direction
         // The coefficients are laid out as:
         // C0_R, C0_B, C0_G, C1_R, C1_B, C1_G ...
-
-        let c0 = na::Vector3::new(self.sh[0], self.sh[1], self.sh[2]);
-        let mut color = SH_C0 * c0;
-
-        if sh_dim > 3
-        {
-            // Add the first order spherical harmonics
-            let c1 = na::Vector3::new(self.sh[3], self.sh[4], self.sh[5]);
-            let c2 = na::Vector3::new(self.sh[6], self.sh[7], self.sh[8]);
-            let c3 = na::Vector3::new(self.sh[9], self.sh[10], self.sh[11]);
-
-            let x = dir[0];
-            let y = dir[1];
-            let z = dir[2];
-
-            color = color - SH_C1 * y * c1 + SH_C1 * z * c2 - SH_C1 * x * c3;
-
-            if sh_dim > 12
-            {
-                let c4 = na::Vector3::new(self.sh[12], self.sh[13], self.sh[14]);
-                let c5 = na::Vector3::new(self.sh[15], self.sh[16], self.sh[17]);
-                let c6 = na::Vector3::new(self.sh[18], self.sh[19], self.sh[20]);
-                let c7 = na::Vector3::new(self.sh[21], self.sh[22], self.sh[23]);
-                let c8 = na::Vector3::new(self.sh[24], self.sh[25], self.sh[26]);
-
-                let (xx, yy, zz) = (x * x, y * y, z * z);
-			    let (xy, yz, xz) = (x * y, y * z, x * z);
-			    color = color +	SH_C2_0 * xy * c4 +
-				SH_C2_1 * yz * c5 +
-				SH_C2_2 * (2.0f32 * zz - xx - yy) * c6 +
-				SH_C2_3 * xz * c7 +
-				SH_C2_4 * (xx - yy) * c8;
-
-                if sh_dim > 27 {
-                    let c9 = na::Vector3::new(self.sh[27], self.sh[28], self.sh[29]);
-                    let c10 = na::Vector3::new(self.sh[30], self.sh[31], self.sh[32]);
-                    let c11 = na::Vector3::new(self.sh[33], self.sh[34], self.sh[35]);
-                    let c12 = na::Vector3::new(self.sh[36], self.sh[37], self.sh[38]);
-                    let c13 = na::Vector3::new(self.sh[39], self.sh[40], self.sh[41]);
-                    let c14 = na::Vector3::new(self.sh[42], self.sh[43], self.sh[44]);
-                    let c15 = na::Vector3::new(self.sh[45], self.sh[46], self.sh[47]);
-
-                    color = color +
-					SH_C3_0 * y * (3.0f32 * xx - yy) * c9 +
-					SH_C3_1 * xy * z * c10 +
-					SH_C3_2 * y * (4.0f32 * zz - xx - yy) * c11 +
-					SH_C3_3 * z * (2.0f32 * zz - 3.0f32 * xx - 3.0f32 * yy) * c12 +
-					SH_C3_4 * x * (4.0f32 * zz - xx - yy) * c13 +
-					SH_C3_5 * z * (xx - yy) * c14 +
-					SH_C3_6 * x * (xx - 3.0f32 * yy) * c15;
-                }
-            }
-        }
-        color += HALF;
+        let color = eval_spherical_harmonics(&self.sh.as_view(), sh_dim, dir);
         (color, self.opacity)
     }
 
@@ -365,7 +373,7 @@ pub fn naive_gaussians() -> Vec<Gaussian>
 }
 pub fn load_from_ply(filename: &str) -> Vec<Gaussian>
 {
-        let mut gaussians = Vec::new();
+    let mut gaussians = Vec::new();
     let file = std::fs::File::open(filename).unwrap();
     let mut file = std::io::BufReader::new(file);
     let gaus_parser = ply_rs::parser::Parser::<Gaussian>::new();
@@ -383,4 +391,130 @@ pub fn load_from_ply(filename: &str) -> Vec<Gaussian>
     }
     gaussians
 
+}
+
+
+pub struct GaussianList {
+    pub positions: na::Matrix4xX<f32>,
+    pub scales: na::Matrix3xX<f32>,
+    pub opacities: na::DVector<f32>,
+    pub rotations: na::Matrix4xX<f32>,
+    pub sh: Matrix48xX<f32>,
+    pub num_gaussians: usize,
+    cov3d: na::Matrix3xX<f32>,
+}
+
+impl GaussianList{
+    pub fn from_vec(gaussians: Vec<Gaussian>) -> Self
+    {
+        let num_gaussians = gaussians.len();
+        // Make position 4D by adding a 1.0 to the end of each position vector
+        let positions = na::Matrix4xX::from_iterator(num_gaussians, gaussians.iter().flat_map(|g| g.position.iter().cloned().chain([1.0])));
+        let scales = na::Matrix3xX::from_iterator(num_gaussians, gaussians.iter().flat_map(|g| g.scale.iter().cloned()));
+        let opacities = na::DVector::from_iterator(num_gaussians, gaussians.iter().map(|g| g.opacity));
+        let rotations = na::Matrix4xX::from_iterator(num_gaussians, gaussians.iter().flat_map(|g| g.rotation.as_vector().iter().cloned()));
+        let sh = Matrix48xX::from_iterator(num_gaussians, gaussians.iter().flat_map(|g| g.sh.iter().cloned()));
+        let cov3d = na::Matrix3xX::zeros(num_gaussians*3);
+        let mut out = Self {
+            positions,
+            scales,
+            opacities,
+            rotations,
+            sh,
+            num_gaussians,
+            cov3d,
+        };
+        out.compute_cov3d();
+        out
+    }
+
+    pub fn naive_gaussians() -> Self {
+        let gaussians = naive_gaussians();
+        Self::from_vec(gaussians)
+    }
+    pub fn compute_cov3d(&mut self)
+    {
+        // Iterate over all gaussians and compute the covariance matrix
+        for i in 0..self.num_gaussians
+        {
+            let rotation = UnitQuaternion::from_quaternion(na::Quaternion::from_vector(self.rotations.column(i).into())).to_rotation_matrix();
+            // square the scales and make a diagonal matrix
+            let scale = na::Matrix3::new(
+                self.scales[(0, i)] * self.scales[(0, i)], 0.0, 0.0,
+                0.0, self.scales[(1, i)] * self.scales[(1, i)], 0.0,
+                0.0, 0.0, self.scales[(2, i)] * self.scales[(2, i)],
+            );
+            // compute the covariance matrix
+            let covariance = rotation * scale * rotation.transpose();
+            self.cov3d.fixed_view_mut::<3,3>(0, i*3).copy_from(&covariance);
+        }
+    }
+
+    pub fn sort(&self, camera: &Camera) -> Vec<usize>
+    {
+        // Converts positions to camera space and sorts by depth
+        let positions = camera.get_view_matrix() * &self.positions;
+        let mut indices: Vec<usize> = (0..self.num_gaussians).collect();
+        indices.sort_by(|a, b| positions[(2, *a)].partial_cmp(&positions[(2, *b)]).unwrap());
+        indices
+    }
+
+    pub fn project_cov3d_to_screen(&self, idx: usize, camera: &Camera) -> na::Matrix2<f32>
+    {
+        let position = self.positions.column(idx);
+        let viewmatrix = camera.get_view_matrix();
+
+        // Project the Gaussian center to the camera space
+        let pos_w = na::Vector4::new(position[0], position[1], position[2], 1.0);
+
+        let pos_cam = viewmatrix * pos_w;
+
+        // Compute the focal length and the tangent of the fov
+        let htanfovxy = camera.get_htanfovxy_focal();
+        let tan_fovx = htanfovxy[0];
+        let tan_fovy = htanfovxy[1];
+        let focal = htanfovxy[2];
+        let focal_x = focal;
+        let focal_y = focal;
+
+        // Compute the tangent of the Gaussian center
+        let mut t = pos_cam.clone();
+        let limx = 1.3 * tan_fovx;
+        let limy = 1.3 * tan_fovy;
+
+        let txtz = pos_cam.x/pos_cam.z;
+        let tytz = pos_cam.y/pos_cam.z;
+
+        t.x = limx.min((-limx).max(txtz)) * pos_cam.z;
+        t.y = limy.min((-limy).max(tytz)) * pos_cam.z;
+
+        // Compute the Jacobian
+        let J = na::Matrix3::new(
+            focal_x / t.z, 0.0, -(focal_x * t.x) / (t.z * t.z),
+            0.0, focal_y / t.z, -(focal_y * t.y) / (t.z * t.z),
+            0.0, 0.0, 0.0
+        );
+
+        let W = viewmatrix.fixed_view::<3, 3>(0, 0).transpose();
+        let T = W * J;
+        let cov3d = self.cov3d.fixed_view::<3,3>(0, 3*idx);
+        let mut cov = T.transpose() * cov3d.transpose() * T;
+
+        // Apply low-pass filter: every Gaussian should be at least
+        // one pixel wide/high. Discard 3rd row and column.
+        let mut cov2d = cov.fixed_view_mut::<2,2>(0,0);
+        cov2d[(0, 0)] += 0.3;
+        cov2d[(1, 1)] += 0.3;
+
+        // Convert into vector to return, along with position in screen space
+        cov2d.into()
+    }
+
+    pub fn color(&self, idx: usize, sh_dim: usize, direction: &Vector3<f32>) -> (Vector3<f32>, f32) {
+        // Compute color from the spherical harmonics for the given direction
+        // The coefficients are laid out as:
+        // C0_R, C0_B, C0_G, C1_R, C1_B, C1_G ...
+        let color = eval_spherical_harmonics(&self.sh.column(idx).as_view(), sh_dim, direction);
+        (color, self.opacities[idx])
+    }
 }
