@@ -1,6 +1,5 @@
-- Define camera intrinsics
-- Rotate gaussian positions into camera frame
-- Sort gaussians by depth
-- Compute N images from N gaussians
-- Stack N images by alpha blending
-- Save to PNG?
+- update ply loader to return structure-of-arrays
+    - update pipeline to use structure-of-arrays
+    - Make sorting more efficient
+- use geometry shader in piipeline to generate vertices
+- create UI using egui or imgui for controlling camera
