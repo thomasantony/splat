@@ -2,6 +2,10 @@
 
 This project is a Rust implementation of a Gaussian Splatting Viewer, inspired by the OpenGL shader code found [here](https://github.com/limacv/GaussianSplattingViewer).
 
+
+![splat renderer screenshot](/notes/screenshot.png)
+
+
 The project was first prototyped in a Jupyter notebook to validate the approach and algorithms. After the prototype was successful, the project was then implemented in Rust using the `euc` software rendering crate.
 
 ## Getting Started
