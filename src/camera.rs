@@ -1,5 +1,6 @@
 use nalgebra as na;
 
+#[derive(Clone, Debug)]
 pub struct Camera {
     znear: f32,
     zfar: f32,
