@@ -1,10 +1,19 @@
-use euc::{buffer::Buffer2d, Pipeline, TriangleList, Empty};
 use nalgebra as na;
-use splat::{gaussians::{Gaussian, self}, camera::Camera};
+use euc::{Pipeline, TriangleList, Empty};
 use na::{Vector2, Vector3, Vector4, SVector};
+use crate::{gaussians::{Gaussian, self}, camera::Camera};
 
-struct Triangle {
-    pub vertices: Vec<Vector2<f32>>,
+
+const VERTICES: &[Vector2<f32>] = &[
+    Vector2::new(-1.,  1.),
+    Vector2::new(-1.,  -1.),
+    Vector2::new(1., -1.),
+    Vector2::new(1., 1.),
+];
+
+const INDICES: &[usize] = &[0, 1, 2, 0, 2, 3];
+
+pub struct GaussianSplatPipeline01 {
     pub gaussians: Vec<Gaussian>,
     pub camera: Camera,
 }
@@ -15,7 +24,30 @@ pub struct VertexInstance {
     pub gaussian_idx: usize,
 }
 
-impl<'r> Pipeline<'r> for Triangle {
+impl GaussianSplatPipeline01{
+    pub fn render_to_buffer(&self, color: &mut euc::Buffer<u32, 2>)
+    {
+        // Create vector of VertexInstances from combining vertices and gaussians
+        let mut vertex_instances = Vec::new();
+        let sorted_gaussians = gaussians::sort_gaussians(&self.gaussians, &self.camera.get_view_matrix());
+        for g_idx in sorted_gaussians.iter() {
+            // For each instance, push all the vertices
+            for vert_idx in INDICES {
+                vertex_instances.push(VertexInstance {
+                    vert_idx: *vert_idx,
+                    gaussian_idx: *g_idx,
+                });
+            }
+        }
+        self.render(
+            vertex_instances,
+            color,
+            &mut Empty::default(),
+        );
+
+    }
+}
+impl<'r> Pipeline<'r> for GaussianSplatPipeline01 {
     type Vertex = VertexInstance;
     type VertexData = SVector<f32, 9>; // color, alpha, conic, coordxy
     type Primitives = TriangleList;
@@ -24,14 +56,14 @@ impl<'r> Pipeline<'r> for Triangle {
 
     fn vertex(&self, vert_inst: &Self::Vertex) -> ([f32; 4], Self::VertexData) {
         let gaussian = &self.gaussians[vert_inst.gaussian_idx];
-        let world_position: na::Matrix<f32, na::Const<3>, na::Const<1>, na::ArrayStorage<f32, 3, 1>> = gaussian.position;
+        let world_position = gaussian.position;
         let ray_direction = (world_position - self.camera.position).normalize();
         let (color, alpha) = gaussian.color(15, &ray_direction);
 
-        let vert = &self.vertices[vert_inst.vert_idx];
+        let vert = &VERTICES[vert_inst.vert_idx];
 
         // Create conic, coordxy, gl_position for passing to fragment shader
-        let mut gl_position: na::Matrix<f32, na::Const<4>, na::Const<1>, na::ArrayStorage<f32, 4, 1>> = Vector4::zeros();
+        let mut gl_position = Vector4::zeros();
 
         let cov2d = gaussian.project_cov3d_to_screen(&self.camera);
 
@@ -122,64 +154,5 @@ impl<'r> Pipeline<'r> for Triangle {
             r,
             (alpha * 255.0) as u8,
         ])
-    }
-}
-
-const W: usize = 1280;
-const H: usize = 720;
-
-fn main() {
-    let mut color = Buffer2d::fill([W, H], 0);
-    const VERTICES: &[Vector2<f32>] = &[
-        Vector2::new(-1.,  1.),
-        Vector2::new(-1.,  -1.),
-        Vector2::new(1., -1.),
-        Vector2::new(1., 1.),
-    ];
-
-    const INDICES: &[usize] = &[0, 1, 2, 0, 2, 3];
-
-    println!("Loading gaussians from ply file");
-    let mut gaussians = gaussians::load_from_ply("notes/point_cloud.ply");
-    // let mut gaussians = gaussians::naive_gaussians();
-
-    // Compute cov3d for each gaussian
-    println!("Computing cov3d for each gaussian");
-    for gaussian in gaussians.iter_mut() {
-        gaussian.compute_cov3d();
-    }
-
-    let camera_pos = Vector3::new(-0.57651054, 2.99040512, -0.03924271);
-    let camera = Camera::new(H as f32, W as f32, Some(camera_pos));
-    let sorted_gaussians = gaussians::sort_gaussians(&gaussians, &camera.get_view_matrix());
-    // Create vector of VertexInstances from combining vertices and gaussians
-    let mut vertex_instances = Vec::new();
-    for g_idx in sorted_gaussians.iter() {
-        // For each instance, push all the vertices
-        for vert_idx in INDICES {
-            vertex_instances.push(VertexInstance {
-                vert_idx: *vert_idx,
-                gaussian_idx: *g_idx,
-            });
-        }
-    }
-
-    let pipeline = Triangle {
-        vertices: VERTICES.to_vec(),
-        gaussians: gaussians.to_vec(),
-        camera,
-    };
-
-    println!("Rendering");
-    pipeline.render(
-        vertex_instances,
-        &mut color,
-        &mut Empty::default(),
-    );
-
-    let mut win = minifb::Window::new("Splat", W, H, minifb::WindowOptions::default()).unwrap();
-    while win.is_open() {
-        win.update_with_buffer(color.raw(), W, H).unwrap();
-        // win.update_with_buffer(color.raw(), W, H).unwrap();
     }
 }

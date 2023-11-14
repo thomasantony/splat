@@ -1,7 +1,7 @@
 use std::ops::MulAssign;
 
 use nalgebra as na;
-use na::{UnitQuaternion, Vector3, Matrix3, Vector4, Vector2, Matrix4};
+use na::{UnitQuaternion, Vector3, Matrix3, Vector4, Vector2};
 use ply_rs::ply::{Property, PropertyAccess};
 
 use crate::camera::Camera;

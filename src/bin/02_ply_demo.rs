@@ -1,12 +1,11 @@
 use euc::buffer::Buffer2d;
 use nalgebra as na;
 use splat::{gaussians, camera::Camera};
-use na::Vector3;
+use na:: Vector3;
 use splat::pipelines::GaussianSplatPipeline01;
 
 const W: usize = 1280;
 const H: usize = 720;
-const CAMERA_POSITION: [f32; 3] = [-0.57651054f32, 2.99040512f32, -0.03924271f32];
 
 fn main() {
     let mut color: euc::Buffer<u32, 2> = Buffer2d::fill([W, H], 0);
@@ -20,7 +19,7 @@ fn main() {
         gaussian.compute_cov3d();
     }
 
-    let camera_pos = Vector3::from_column_slice(&CAMERA_POSITION);
+    let camera_pos = Vector3::new(-0.57651054, 2.99040512, -0.03924271);
     let camera = Camera::new(H as f32, W as f32, Some(camera_pos));
 
     let pipeline = GaussianSplatPipeline01 {
@@ -36,5 +35,6 @@ fn main() {
     let mut win = minifb::Window::new("Splat", W, H, minifb::WindowOptions::default()).unwrap();
     while win.is_open() {
         win.update_with_buffer(color.raw(), W, H).unwrap();
+        // win.update_with_buffer(color.raw(), W, H).unwrap();
     }
 }
