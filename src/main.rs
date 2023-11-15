@@ -9,13 +9,15 @@ use splat::pipelines::GaussianSplatPipeline01;
 const W: usize = 800;
 const H: usize = 600;
 // const CAMERA_POSITION: [f32; 3] = [-0.57651054f32, 2.99040512f32, -0.03924271f32];
-const CAMERA_POSITION: [f32; 3] = [5.0, 0.0, 0.0];
+// const CAMERA_POSITION: [f32; 3] = [0.0, 1.9991251, 0.05583868];
+const CAMERA_POSITION: [f32; 3] = [0.0, 0.0, 5.0];
 
 fn main() {
     let mut color: euc::Buffer<u32, 2> = Buffer2d::fill([W, H], 0);
 
     println!("Loading gaussians from ply file");
     let mut gaussians = gaussians::load_from_ply("notes/point_cloud.ply");
+    // let mut gaussians = gaussians::naive_gaussians();
 
     // Compute cov3d for each gaussian
     println!("Computing cov3d for each gaussian");
@@ -34,6 +36,7 @@ fn main() {
     //     gaussians: GaussianList::from_vec(gaussians.to_vec()),
     //     camera,
     // };
+    // pipeline.camera.is_pose_dirty = true;
 
     let mut win = minifb::Window::new("Splat", W, H, minifb::WindowOptions::default()).unwrap();
     while win.is_open() && !win.is_key_down(minifb::Key::Escape) {
@@ -55,16 +58,22 @@ fn main() {
                     // Yaw right
                     pipeline.camera.update_yaw_angle(10.0* PI/180.0);
                 },
+                minifb::Key::R =>
+                {
+                    pipeline.camera.position = Vector3::from_column_slice(&CAMERA_POSITION);
+                    pipeline.camera.is_pose_dirty = true;
+                }
                 _ => {}
             }
         });
         if pipeline.camera.is_pose_dirty {
-            // Time tje rendering
+            // Time the rendering
             let now = std::time::Instant::now();
             pipeline.camera.update_camera_pose();
             color = Buffer2d::fill([W, H], 0);
             pipeline.render_to_buffer(&mut color);
             let elapsed = now.elapsed();
+            pipeline.camera.is_pose_dirty = false;
             println!("Rendering took {} ms", elapsed.as_millis());
         }
         win.update_with_buffer(color.raw(), W, H).unwrap();
