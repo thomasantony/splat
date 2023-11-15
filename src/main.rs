@@ -1,6 +1,6 @@
 use euc::buffer::Buffer2d;
 use nalgebra as na;
-use splat::{gaussians, camera::Camera};
+use splat::{gaussians::{self, GaussianList}, camera::Camera, pipelines::GaussianSplatPipeline02};
 use na::Vector3;
 use splat::pipelines::GaussianSplatPipeline01;
 
@@ -23,8 +23,12 @@ fn main() {
     let camera_pos = Vector3::from_column_slice(&CAMERA_POSITION);
     let camera = Camera::new(H as f32, W as f32, Some(camera_pos));
 
-    let pipeline = GaussianSplatPipeline01 {
-        gaussians: gaussians.to_vec(),
+    // let pipeline = GaussianSplatPipeline01 {
+    //     gaussians: gaussians.to_vec(),
+    //     camera,
+    // };
+    let pipeline = GaussianSplatPipeline02 {
+        gaussians: GaussianList::from_vec(gaussians.to_vec()),
         camera,
     };
 
