@@ -14,6 +14,8 @@ pub struct Camera {
     pitch: f32,
     pub is_pose_dirty: bool,
     is_intrin_dirty: bool,
+    view_matrix: na::Matrix4<f32>,
+    projection_matrix: na::Matrix4<f32>,
 }
 
 impl Camera {
@@ -31,19 +33,25 @@ impl Camera {
             pitch: 0.0,
             is_pose_dirty: true,
             is_intrin_dirty: true,
+            view_matrix: na::Matrix4::identity(),
+            projection_matrix: na::Matrix4::identity(),
         }
     }
 
-    pub fn get_view_matrix(&self) -> na::Matrix4<f32> {
+    pub fn compute_matrices(&mut self)
+    {
         let position = na::Point3::from(self.position);
         let target = na::Point3::from(self.target);
-        let view = na::Matrix4::look_at_rh(
+        self.view_matrix = na::Matrix4::look_at_rh(
             &position,
             &target,
             &self.up,
         );
-        view
+        self.projection_matrix = na::Perspective3::new(self.w / self.h, self.fovy, self.znear, self.zfar).into_inner();
+    }
 
+    pub fn get_view_matrix(&self) -> &na::Matrix4<f32> {
+        return &self.view_matrix;
     }
 
     pub fn update_resolution(&mut self, height: f32, width: f32) {
@@ -52,8 +60,8 @@ impl Camera {
         self.is_intrin_dirty = true;
     }
 
-    pub fn get_project_matrix(&self) -> na::Matrix4<f32> {
-        na::Perspective3::new(self.w / self.h, self.fovy, self.znear, self.zfar).into_inner()
+    pub fn get_project_matrix(&self) -> &na::Matrix4<f32> {
+        return &self.projection_matrix;
     }
 
     pub fn get_htanfovxy_focal(&self) -> na::Vector3<f32> {
@@ -84,8 +92,8 @@ impl Camera {
         let pitch_axis = transform_c2w * camera_y;
         let yaw_axis = transform_c2w * camera_x;
 
-        println!("Pitch axis in world space: {:?}", pitch_axis);
-        println!("Yaw axis in world space: {:?}", yaw_axis);
+        // println!("Pitch axis in world space: {:?}", pitch_axis);
+        // println!("Yaw axis in world space: {:?}", yaw_axis);
 
         let pitch_rotation = na::Rotation3::from_axis_angle(&pitch_axis, self.pitch);
         let yaw_rotation = na::Rotation3::from_axis_angle(&yaw_axis, self.yaw);
@@ -93,10 +101,11 @@ impl Camera {
         let rotation = yaw_rotation * pitch_rotation;
 
         self.position = rotation * self.position;
-        println!("Camera position: {:?}", self.position);
+        // println!("Camera position: {:?}", self.position);
 
         self.yaw = 0.0;
         self.pitch =0.0;
+        self.compute_matrices();
 
         self.is_pose_dirty = false;
     }
