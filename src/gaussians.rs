@@ -390,6 +390,16 @@ pub fn load_from_ply(filename: &str) -> Vec<Gaussian>
             _ => panic!("Unexpected element!"),
         }
     }
+
+    // Find average position of all gaussians and subtract it from all positions
+    let mut avg_pos = Vector3::new(0.0, 0.0, 0.0);
+    for g in gaussians.iter() {
+        avg_pos += g.position;
+    }
+    avg_pos /= gaussians.len() as f32;
+    for g in gaussians.iter_mut() {
+        g.position -= avg_pos;
+    }
     gaussians
 
 }
