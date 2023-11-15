@@ -12,27 +12,25 @@ pub struct Camera {
     up: na::Vector3<f32>,
     yaw: f32,
     pitch: f32,
-    is_pose_dirty: bool,
+    pub is_pose_dirty: bool,
     is_intrin_dirty: bool,
-    roll_sensitivity: f32,
 }
 
 impl Camera {
-    pub fn new(h: f32, w: f32, position: Option<na::Vector3<f32>>) -> Self {
+    pub fn new(h: f32, w: f32, start_position: Option<na::Vector3<f32>>) -> Self {
         Self {
             znear: 0.01,
-            zfar: 100.0,
+            zfar: 1000.0,
             h,
             w,
             fovy: std::f32::consts::PI / 2.0,
-            position: position.unwrap_or(na::Vector3::new(0.0, 0.0, 3.0)),
+            position: start_position.unwrap_or(na::Vector3::new(0.0, 0.0, 3.0)),
             target: na::Vector3::new(0.0, 0.0, 0.0),
             up: na::Vector3::new(0.0, -1.0, 0.0),
-            yaw: -std::f32::consts::PI / 2.0,
+            yaw: 0.0,
             pitch: 0.0,
             is_pose_dirty: true,
             is_intrin_dirty: true,
-            roll_sensitivity: 0.03,
         }
     }
 
@@ -67,5 +65,39 @@ impl Camera {
 
     pub fn get_focal(&self) -> f32 {
         self.h / (2.0 * (self.fovy / 2.0).tan())
+    }
+    pub fn update_pitch_angle(&mut self, delta: f32) {
+        self.pitch = delta;
+        self.is_pose_dirty = true;
+    }
+    pub fn update_yaw_angle(&mut self, delta: f32) {
+        self.yaw = delta;
+        self.is_pose_dirty = true;
+    }
+
+    pub fn update_camera_pose(&mut self) {
+        let camera_x = na::Vector3::x_axis();    // Pitch axis
+        let camera_y = na::Vector3::y_axis();    // Yaw axis
+
+        // Camera's Z axis is facing in the -self.position direction in the world frame
+        let transform_c2w = na::Rotation::<f32, 3>::rotation_between(&-self.position, &na::Vector3::z()).unwrap_or(na::Rotation3::identity());
+        let pitch_axis = transform_c2w * camera_y;
+        let yaw_axis = transform_c2w * camera_x;
+
+        println!("Pitch axis in world space: {:?}", pitch_axis);
+        println!("Yaw axis in world space: {:?}", yaw_axis);
+
+        let pitch_rotation = na::Rotation3::from_axis_angle(&pitch_axis, self.pitch);
+        let yaw_rotation = na::Rotation3::from_axis_angle(&yaw_axis, self.yaw);
+
+        let rotation = yaw_rotation * pitch_rotation;
+
+        self.position = rotation * self.position;
+        println!("Camera position: {:?}", self.position);
+
+        self.yaw = 0.0;
+        self.pitch =0.0;
+
+        self.is_pose_dirty = false;
     }
 }

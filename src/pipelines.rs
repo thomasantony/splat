@@ -13,6 +13,7 @@ const VERTICES: &[Vector2<f32>] = &[
 
 const INDICES: &[usize] = &[0, 1, 2, 0, 2, 3];
 
+#[inline]
 fn gaussian_vertex_shader(vert: &Vector2<f32>, g_position_w: &Vector3<f32>, cov2d: &na::Matrix2<f32>, camera: &Camera) -> (Vector4<f32>, Vector3<f32>, Vector2<f32>)
 {
     // Create conic, coordxy, gl_position for passing to fragment shader
@@ -124,10 +125,10 @@ impl<'r> Pipeline<'r> for GaussianSplatPipeline01 {
     }
 
     fn fragment(&self, vert_output: Self::VertexData) -> Self::Fragment {
-        let color_rgb  = Vector3::new(vert_output[0], vert_output[1], vert_output[2]);
+        let color_rgb  = vert_output.fixed_view::<3,1>(0,0);
         let alpha = vert_output[3];
-        let conic = Vector3::new(vert_output[4], vert_output[5], vert_output[6]);
-        let coordxy = Vector2::new(vert_output[7], vert_output[8]);
+        let conic = vert_output.fixed_view::<3,1>(4,0);
+        let coordxy = vert_output.fixed_view::<2,1>(7,0);
 
         // let power = -0.5 * (conic.x * coordxy.x * coordxy.x + conic.z * coordxy.y * coordxy.y) - conic.y * coordxy.x * coordxy.y;
         let power = -0.5 * (conic[0] * coordxy[0] * coordxy[0] + conic[2] * coordxy[1] * coordxy[1]) - conic[1] * coordxy[0] * coordxy[1];

@@ -37,6 +37,7 @@ pub struct Gaussian {
     pub cov3d: na::Matrix3<f32>,
 }
 
+#[inline]
 pub fn eval_spherical_harmonics(sh: &VectorView<f32, na::U48>, sh_dim: usize, dir: &Vector3<f32>) -> Vector3<f32>
 {
     let c0 = sh.fixed_rows::<3>(0);
@@ -45,9 +46,9 @@ pub fn eval_spherical_harmonics(sh: &VectorView<f32, na::U48>, sh_dim: usize, di
     if sh_dim > 3
     {
         // Add the first order spherical harmonics
-        let c1 = sh.fixed_rows::<3>(3);
-        let c2 = sh.fixed_rows::<3>(6);
-        let c3 = sh.fixed_rows::<3>(9);
+        let c1 = sh.fixed_view::<3,1>(3,0);
+        let c2 = sh.fixed_view::<3,1>(6,0);
+        let c3 = sh.fixed_view::<3,1>(9,0);
 
         // Get a 3x3 view into the elements 3..12 of sh
 
@@ -59,11 +60,11 @@ pub fn eval_spherical_harmonics(sh: &VectorView<f32, na::U48>, sh_dim: usize, di
 
         if sh_dim > 12
         {
-            let c4 = sh.fixed_rows::<3>(12);
-            let c5 = sh.fixed_rows::<3>(15);
-            let c6 = sh.fixed_rows::<3>(18);
-            let c7 = sh.fixed_rows::<3>(21);
-            let c8 = sh.fixed_rows::<3>(24);
+            let c4 = sh.fixed_view::<3,1>(12,0);
+            let c5 = sh.fixed_view::<3,1>(15,0);
+            let c6 = sh.fixed_view::<3,1>(18,0);
+            let c7 = sh.fixed_view::<3,1>(21,0);
+            let c8 = sh.fixed_view::<3,1>(24,0);
 
             let (xx, yy, zz) = (x * x, y * y, z * z);
             let (xy, yz, xz) = (x * y, y * z, x * z);
@@ -74,13 +75,13 @@ pub fn eval_spherical_harmonics(sh: &VectorView<f32, na::U48>, sh_dim: usize, di
             SH_C2_4 * (xx - yy) * c8;
 
             if sh_dim > 27 {
-                let c9 = sh.fixed_rows::<3>(27);
-                let c10 = sh.fixed_rows::<3>(30);
-                let c11 = sh.fixed_rows::<3>(33);
-                let c12 = sh.fixed_rows::<3>(36);
-                let c13 = sh.fixed_rows::<3>(39);
-                let c14 = sh.fixed_rows::<3>(42);
-                let c15 = sh.fixed_rows::<3>(45);
+                let c9 =  sh.fixed_view::<3,1>(27,0);
+                let c10 = sh.fixed_view::<3,1>(30, 0);
+                let c11 = sh.fixed_view::<3,1>(33, 0);
+                let c12 = sh.fixed_view::<3,1>(36, 0);
+                let c13 = sh.fixed_view::<3,1>(39, 0);
+                let c14 = sh.fixed_view::<3,1>(42, 0);
+                let c15 = sh.fixed_view::<3,1>(45, 0);
 
                 color = color +
                 SH_C3_0 * y * (3.0f32 * xx - yy) * c9 +
@@ -152,8 +153,8 @@ impl Gaussian {
         // Apply low-pass filter: every Gaussian should be at least
         // one pixel wide/high. Discard 3rd row and column.
         let mut cov2d = cov.fixed_view_mut::<2,2>(0,0);
-        cov2d[(0, 0)] += 0.3;
-        cov2d[(1, 1)] += 0.3;
+        cov2d[(0, 0)] += 0.01;
+        cov2d[(1, 1)] += 0.01;
 
         // Convert into vector to return, along with position in screen space
         cov2d.into()
@@ -299,7 +300,7 @@ pub fn sort_gaussians(gaussians: &Vec<Gaussian>, view: &na::Matrix4<f32>) -> Vec
 
     // Sort by depth and get indices of columns
     let mut indices: Vec<usize> = (0..gaussians.len()).collect();
-    indices.sort_by(|a, b| positions[(2, *a)].partial_cmp(&positions[(2, *b)]).unwrap());
+    indices.sort_by(|a, b| positions[(2, *a)].partial_cmp(&positions[(2, *b)]).unwrap_or(std::cmp::Ordering::Equal));
 
     indices
 }
@@ -310,7 +311,7 @@ pub fn sort_gaussians_by_depth(positions_w: &na::Matrix4xX<f32>, view: &na::Matr
 
     // Sort by depth and get indices of columns
     let mut indices: Vec<usize> = (0..positions_w.shape().1).collect();
-    indices.sort_by(|a, b| positions[(2, *a)].partial_cmp(&positions[(2, *b)]).unwrap());
+    indices.sort_by(|a, b| positions[(2, *a)].partial_cmp(&positions[(2, *b)]).unwrap_or(std::cmp::Ordering::Equal));
 
     indices
 }
